@@ -23,7 +23,7 @@ from offlinerlkit.policy import COMBOPolicy
 
 from pbrl import scale_rewards, generate_pbrl_dataset, make_latent_reward_dataset, train_latent, predict_and_label_latent_reward
 from pbrl import label_by_trajectory_reward, generate_pbrl_dataset_no_overlap, small_d4rl_dataset
-from pbrl import label_by_trajectory_reward_multiple_bernoullis, label_by_original_rewards
+from pbrl import label_by_original_rewards, pick_and_generate_pbrl_dataset
 
 """
 suggested hypers
@@ -96,9 +96,11 @@ def get_args():
     parser.add_argument("--quick_stop", type=int, default=0)
     parser.add_argument("--dataset_size_multiplier", type=float, default=1.0)
     parser.add_argument("--project", type=str, default="")
-    parser.add_argument("--use_original_dataset", type=int, default=1)
+    parser.add_argument("--use_original_dataset", type=int, default=0)
     parser.add_argument("--log_dir_name", type=str, default="")
-
+    parser.add_argument("--reuse_fraction", type=float, default=0.0)
+    parser.add_argument("--reuse_times", type=int, default=0)
+    
     return parser.parse_args()
 
 
@@ -112,26 +114,24 @@ def train(args=get_args()):
         num_t = args.num_t
         len_t = args.len_t
         num_trials = args.num_berno
+        allow_overlap = args.bin_label_allow_overlap
+        reuse_fraction = args.reuse_fraction
+        reuse_times = args.reuse_times
+        
         if args.latent_reward:
             dataset = scale_rewards(dataset)
-            if args.bin_label_allow_overlap:
-                pbrl_dataset = generate_pbrl_dataset(dataset, pbrl_dataset_file_path=f'saved/pbrl_datasets/pbrl_dataset_{args.task}_{num_t}_{len_t}_numTrials={num_trials}.npz', num_t=num_t, len_t=len_t)
-            else:
-                pbrl_dataset = generate_pbrl_dataset_no_overlap(dataset, pbrl_dataset_file_path=f'saved/pbrl_datasets_no_overlap/pbrl_dataset_{args.task}_{num_t}_{len_t}_numTrials={num_trials}', num_t=num_t, len_t=len_t)
+            pbrl_dataset = pick_and_generate_pbrl_dataset(dataset=dataset, env = args.task, num_t=num_t, len_t=len_t, num_trials=num_trials, 
+                                                    allow_overlap=allow_overlap, reuse_fraction=reuse_fraction, reuse_times=reuse_times)
             latent_reward_model, indices = train_latent(dataset, pbrl_dataset, num_berno=num_trials, num_t=num_t, len_t=len_t)
             dataset = predict_and_label_latent_reward(dataset, latent_reward_model, indices)
         elif args.bin_label:
             dataset = scale_rewards(dataset)
-            if args.bin_label_allow_overlap:
-                pbrl_dataset = generate_pbrl_dataset(dataset, pbrl_dataset_file_path=f'saved/pbrl_datasets/pbrl_dataset_{args.task}_{num_t}_{len_t}_numTrials={num_trials}.npz', num_t=num_t, len_t=len_t)
-            else:
-                pbrl_dataset = generate_pbrl_dataset_no_overlap(dataset, pbrl_dataset_file_path=f'saved/pbrl_datasets_no_overlap/pbrl_dataset_{args.task}_{num_t}_{len_t}_numTrials={num_trials}', num_t=num_t, len_t=len_t)
+            pbrl_dataset = pick_and_generate_pbrl_dataset(dataset=dataset, env = args.task, num_t=num_t, len_t=len_t, num_trials=num_trials, 
+                                                    allow_overlap=allow_overlap, reuse_fraction=reuse_fraction, reuse_times=reuse_times)
             dataset = label_by_trajectory_reward(dataset, pbrl_dataset, num_t=num_t, len_t=len_t, num_trials=num_trials)
         else:
-            if args.bin_label_allow_overlap:
-                pbrl_dataset = generate_pbrl_dataset(dataset, pbrl_dataset_file_path=f'saved/pbrl_datasets/pbrl_dataset_{args.task}_{num_t}_{len_t}_numTrials={num_trials}.npz', num_t=num_t, len_t=len_t)
-            else:
-                pbrl_dataset = generate_pbrl_dataset_no_overlap(dataset, pbrl_dataset_file_path=f'saved/pbrl_datasets_no_overlap/pbrl_dataset_{args.task}_{num_t}_{len_t}_numTrials={num_trials}', num_t=num_t, len_t=len_t)
+            pbrl_dataset = pick_and_generate_pbrl_dataset(dataset=dataset, env = args.task, num_t=num_t, len_t=len_t, num_trials=num_trials, 
+                                                    allow_overlap=allow_overlap, reuse_fraction=reuse_fraction, reuse_times=reuse_times)
             dataset = label_by_original_rewards(dataset, pbrl_dataset, num_t)
         dataset = small_d4rl_dataset(dataset, dataset_size_multiplier=args.dataset_size_multiplier)
 
